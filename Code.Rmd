@@ -1,0 +1,100 @@
+Human Activity Recognition   
+Alessandro De Marchi
+========================================================
+
+I begin by obtaining the data set and understanding the variables therein contained.
+
+```{r}
+library("caret")
+library("e1071")
+# Get the data
+data<-read.csv("/Users/alessandrodemarchi/Documents/CourseraProj/pml-training.csv")
+```
+
+Looking at the date, many columns are filled with NAs. I remove those fields by applying the following:
+
+```{r}
+NAs <- apply(data,2,function(x) {sum(is.na(x))}) 
+data <- data[,which(NAs == 0)]
+```
+
+The large number of variables collected in this study exposes our empirical methodology to data snooping biases. The first step is to select a subset of the 160 variables provided. A prior study on the relevant features has already been conducted in the paper employing the feature selection algorithm based on correlation proposed by Hall. 
+
+These variables are:
+Belt:mean and variance of the roll (avg_roll_belt, var_roll_belt), maximum, range and variance of the accelerometer vector (var_total_accel_belt), variance of the gyro (gyros_belt_x or gyros_belt_y) and variance of the magnetometer (magnet_belt_y).
+Arm: he variance of the accelerometer vector (var_accel_arm) and the maximum and minimum of the magnetometer (magnet_arm_x, magnet_arm_y, magnet_arm_z).
+Dumbbell: the maximum of the acceleration (accel_dumbbell_z or accel_dumbbell_x or accel_dumbbell_y), variance of the gyro (gyros_dumbbell_x or gyros_dumbbell_y or gyros_dumbbell_z) and maximum and minimum of the magnetometer (magnet_dumbbell_x or magnet_dumbbell_y or magnet_dumbbell_z).
+Forearm: the sum of the pitch (pitch_forearm) and the maximum and minimum of the gyro (gyros_forearm_x, gyros_forearm_y, gyros_forearm_z).
+
+```{r}
+inTrain<-createDataPartition (y=data$classe, p=0.2,list=FALSE)
+training <- data[inTrain,]
+test <- data[-inTrain,]
+```
+
+For the study I use a cross-validation on a training set split into 20% (to reduce run time) of it for training and 75% for prediction of the out-of-sample error. 
+
+I choose a Random Forest kind of the model for our prediction, due to the characteristic noise in the sensor data. The following code is intended to train the model in the training set:
+
+```{r}
+ctrl <- trainControl(method = "cv")
+modelFit <- train (classe ~     gyros_belt_x +
+                     gyros_belt_y + magnet_belt_y  + magnet_arm_x + magnet_arm_y +
+                     magnet_arm_z + accel_dumbbell_z + accel_dumbbell_x + accel_dumbbell_y + 
+                     gyros_dumbbell_x + gyros_dumbbell_y + gyros_dumbbell_z  + magnet_dumbbell_x +
+                     magnet_dumbbell_y + magnet_dumbbell_z + pitch_forearm + gyros_forearm_x +
+                     gyros_forearm_y + gyros_forearm_z ,data=training,method="rf", trControl=ctrl)
+modelFit
+```
+
+Because the accuracy rate could be more satisfactory we make an educated inclusion of other variables: 
+roll_belt, pitch_belt,yaw_belt, roll_arm, pitch_arm, yaw_arm,total_accel_arm, gyros_arm_x,gyros_arm_y,gyros_arm_z, accel_arm_x, accel_arm_y, accel_arm_z, roll_dumbbell, pitch_dumbbell, yaw_dumbbell, max_picth_dumbbell, total_accel_belt.
+
+
+```{r}
+modelFit <- train (classe ~     gyros_belt_x +
+                     gyros_belt_y + magnet_belt_y  + magnet_arm_x + magnet_arm_y +
+                     magnet_arm_z + accel_dumbbell_z + accel_dumbbell_x + accel_dumbbell_y + 
+                     gyros_dumbbell_x + gyros_dumbbell_y + gyros_dumbbell_z  + magnet_dumbbell_x +
+                     magnet_dumbbell_y + magnet_dumbbell_z + pitch_forearm + gyros_forearm_x +
+                     gyros_forearm_y + gyros_forearm_z + roll_belt + pitch_belt + yaw_belt +
+                     roll_arm + pitch_arm + 
+                     yaw_arm + total_accel_arm + gyros_arm_x + gyros_arm_y + gyros_arm_z +
+                     accel_arm_x + accel_arm_y + accel_arm_z + roll_dumbbell + pitch_dumbbell+
+                     yaw_dumbbell+
+                     total_accel_belt,data=training,method="rf", trControl=ctrl)
+modelFit
+```
+
+
+We use the above model to predict the values for classe in the cross validation set:
+
+```{r}
+prediction <- predict(modelFit,newdata=test)
+confusionMatrix(prediction, test$classe)
+
+```
+
+I am satisfied with the quality of the model as the lower bound of 95% confidence interval for the accuracy is above 95%.
+
+Lastly, I estimate the error appropriately with cross-validatio for the out-of-sample error in the following way:
+
+```{r}
+# Forecast the out-of-sample error rate
+1 - ( sum( prediction == test$classe) / nrow(test) )
+```
+
+The error expected in the test set provided is then about 3%.
+
+The predictions on the new set are computed as follows:
+
+```{r}
+# Read in new test set
+dataTest<-read.csv("/Users/alessandrodemarchi/Documents/CourseraProj/pml-testing.csv",na.strings=c("NA",""))
+NAs <- apply(dataTest,2,function(x) {sum(is.na(x))}) 
+dataTest <- dataTest[,which(NAs == 0)]
+
+# Calculate predictions
+predictionNew <- predict(modelFit,newdata=dataTest)
+
+```
